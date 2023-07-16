@@ -1,0 +1,195 @@
+# Motiva-PA Machine Learning paper ADULTS
+### Create by Timothy Cavazzotto
+### Started at 24/06/2023
+### Ended at 16/07/2023
+
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import ElasticNet
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+import pandas as pd
+from google.colab import files
+uploaded = files.upload()
+
+import pandas as pd
+dados= pd.read_excel("dados_ml.xlsx")
+dados
+
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+# divisão treino, validação e teste
+Barreira = dados["Barreira"].copy()
+dados = dados.drop(["Barreira", "id"], axis=1)
+
+
+# Divisão em treinamento, validação e teste (70/30)
+X_train, X_test, y_train, y_test = train_test_split(dados, Barreira, 
+                                                    test_size=0.30, 
+                                                    random_state=42, 
+                                                    stratify=Barreira)
+
+
+# Verificação dos tamanhos dos conjuntos
+print("Tamanho do conjunto de treinamento:", X_train)
+print("Tamanho do conjunto de validação:", X_test)
+print("Tamanho do conjunto de teste:", y_train)
+print("Tamanho do conjunto de teste:", y_test)
+
+Os dados atuais tem duas categorias de barreiras (modificáveis e não modificáveis)
+
+from imblearn.over_sampling import SMOTE
+
+over = SMOTE(sampling_strategy=1.0)
+
+X_train, y_train = over.fit_resample(X_train, y_train)
+
+def getKtops(y_test, k_perc):
+    return int(y_test.shape[0]*(k_perc/100))
+
+from xgboost import XGBClassifier
+from hyperopt import hp
+import numpy as np
+
+xgboost_space = {
+    'learning_rate': [0.1, 0.01, 0.001],
+    'max_depth': [3, 5, 7],
+    'n_estimators': [100, 200, 300]
+}
+
+
+!pip install pyerfa -U
+
+# Criar o classificador XGBoost
+xgb_classifier = XGBClassifier()
+grid_search = GridSearchCV(estimator=xgb_classifier, 
+                           param_grid=xgboost_space,
+                           scoring='roc_auc',
+                           cv=5)
+
+
+
+# Executar a busca em grade
+grid_search.fit(X_train, y_train)
+
+# Obter os melhores hiperparâmetros e o melhor desempenho
+best_params = grid_search.best_params_
+best_score = grid_search.best_score_
+print("Melhores hiperparâmetros:", best_params)
+print("Melhor ROC AUC:", best_score)
+
+# Treinar o modelo com os melhores hiperparâmetros
+best_xgb_classifier = XGBClassifier(**best_params)
+best_xgb_classifier.fit(X_train, y_train)
+
+# Obter as importâncias das variáveis
+importances = best_xgb_classifier.feature_importances_
+
+# Criar uma lista de tuplas com o nome da variável e a importância
+feature_importances = [(feature, importance) for feature, 
+                       importance in zip(X_train, importances)]
+
+# Ordenar a lista pelas importâncias em ordem decrescente
+feature_importances = sorted(feature_importances, 
+                             key=lambda x: x[1], 
+                             reverse=True)
+
+
+
+# Imprimir as variáveis mais importantes
+print("Variáveis mais importantes:")
+for feature, importance in feature_importances:
+    print(f"{feature}: {importance}")
+
+from sklearn.metrics import roc_auc_score
+
+# Fazer previsões no conjunto de teste
+y_pred = best_xgb_classifier.predict(X_test)
+
+# Avaliar a performance do modelo no conjunto de teste
+roc_auc = roc_auc_score(y_test, y_pred)
+
+# Imprimir as métricas de avaliação
+print("ROC AUC no conjunto de teste:", roc_auc)
+
+from sklearn.metrics import confusion_matrix
+
+# Calcular a matriz de confusão
+cm = confusion_matrix(y_test, y_pred)
+
+# Imprimir a matriz de confusão
+print("Matriz de Confusão:")
+print(cm)
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, classification_report
+
+# Fazer previsões no conjunto de teste
+y_pred = best_xgb_classifier.predict(X_test)
+
+# Calcular a acurácia
+accuracy = accuracy_score(y_test, y_pred)
+print("Acurácia:", accuracy)
+
+# Calcular a precisão
+precision = precision_score(y_test, y_pred)
+print("Precisão:", precision)
+
+# Calcular o recall
+recall = recall_score(y_test, y_pred)
+print("Recall:", recall)
+
+# Calcular o F1-score
+f1 = f1_score(y_test, y_pred)
+print("F1-score:", f1)
+
+# Calcular a área sob a curva ROC
+roc_auc = roc_auc_score(y_test, y_pred)
+print("Área sob a curva ROC:", roc_auc)
+
+
+
+# Acessar as árvores individuais
+trees = best_xgb_classifier.get_booster().trees_to_dataframe()
+
+# Visualizar as árvores individualmente
+for i, tree in enumerate(trees["Tree"]):
+    print(f"Árvore {i+1}:")
+    print(tree)
+
+
+
+!pip install graphviz
+!pip install pydot
+import xgboost as xgb
+import graphviz
+import pydot
+import xgboost as xgb
+from xgboost import plot_tree
+import matplotlib.pyplot as plt
+
+
+# Acessar as árvores individuais
+trees = best_xgb_classifier.get_booster().trees_to_dataframe()
+
+# Verificar se o índice está dentro do intervalo válido
+if 0 <= 99 < len(trees):
+    # Acessar a árvore de índice específico
+    tree_index = 99
+    tree = trees.iloc[tree_index]
+
+    # Configurar as opções da árvore
+    params = {
+        'dpi': 300,  # Resolução em dpi (alta resolução)
+        'orientation': 'horizontal',  # Orientação vertical
+        'rankdir': 'LR'  # Nós e folhas estruturados para a direita
+    }
+
+    # Visualizar a árvore em formato gráfico
+    plt.figure(figsize=(20, 20))  # Tamanho da figura
+    plot_tree(best_xgb_classifier, num_trees=tree_index, ax=plt.gca())
+    plt.savefig('arvore.pdf', dpi=params['dpi'])  # Salvar a imagem em formato PNG com alta resolução
+else:
+    print("O índice da árvore está fora do intervalo válido.")
